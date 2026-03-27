@@ -97,6 +97,15 @@ class TunnelManager: ObservableObject {
     func stopTunnel(id: UUID) {
         processes[id]?.stop()
         processes.removeValue(forKey: id)
+        // Update state immediately — don't rely on async terminationHandler
+        // which may not fire if TunnelProcess is deallocated
+        if tunnelStates[id] != nil {
+            tunnelStates[id] = TunnelState(
+                status: .disconnected,
+                retryCount: 0,
+                recentLogs: tunnelStates[id]?.recentLogs ?? []
+            )
+        }
     }
 
     func stopAll() {
