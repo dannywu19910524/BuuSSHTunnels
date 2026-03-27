@@ -16,19 +16,15 @@ final class ReconnectPolicyTests: XCTestCase {
         XCTAssertEqual(ReconnectPolicy.delay(forAttempt: 10), 60)
         XCTAssertEqual(ReconnectPolicy.delay(forAttempt: 100), 60)
     }
-    func testShouldNotifyAtThree() {
+    func testShouldNotifyEvery30() {
         XCTAssertFalse(ReconnectPolicy.shouldNotify(retryCount: 1))
-        XCTAssertFalse(ReconnectPolicy.shouldNotify(retryCount: 2))
-        XCTAssertTrue(ReconnectPolicy.shouldNotify(retryCount: 3))
-    }
-    func testShouldNotifyEveryTenAfterThree() {
-        XCTAssertFalse(ReconnectPolicy.shouldNotify(retryCount: 4))
-        XCTAssertFalse(ReconnectPolicy.shouldNotify(retryCount: 12))
-        XCTAssertTrue(ReconnectPolicy.shouldNotify(retryCount: 13))
-        XCTAssertFalse(ReconnectPolicy.shouldNotify(retryCount: 14))
-        XCTAssertTrue(ReconnectPolicy.shouldNotify(retryCount: 23))
-        XCTAssertTrue(ReconnectPolicy.shouldNotify(retryCount: 33))
-        XCTAssertTrue(ReconnectPolicy.shouldNotify(retryCount: 993))
+        XCTAssertFalse(ReconnectPolicy.shouldNotify(retryCount: 15))
+        XCTAssertFalse(ReconnectPolicy.shouldNotify(retryCount: 29))
+        XCTAssertTrue(ReconnectPolicy.shouldNotify(retryCount: 30))
+        XCTAssertFalse(ReconnectPolicy.shouldNotify(retryCount: 31))
+        XCTAssertTrue(ReconnectPolicy.shouldNotify(retryCount: 60))
+        XCTAssertTrue(ReconnectPolicy.shouldNotify(retryCount: 90))
+        XCTAssertTrue(ReconnectPolicy.shouldNotify(retryCount: 990))
     }
     func testShouldNotifyNeverAtZero() {
         XCTAssertFalse(ReconnectPolicy.shouldNotify(retryCount: 0))
