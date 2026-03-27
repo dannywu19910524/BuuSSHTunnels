@@ -3,11 +3,38 @@ import Foundation
 enum SSHCommand {
     private static let extraOptions = "-o ServerAliveInterval=15 -o ServerAliveCountMax=3 -o ExitOnForwardFailure=yes -N"
 
+    /// Strips -f, -N, -T from user command (we add -N ourselves; -f backgrounds ssh
+    /// which breaks our process management; -T is implied by -N).
+    static func sanitizeCommand(_ command: String) -> String {
+        let parts = command.components(separatedBy: .whitespaces).filter { !$0.isEmpty }
+        let argFlags: Set<Character> = Set("bcDEeFIiJLlmOopQRSWw")
+        let stripFlags: Set<Character> = Set("fNT")
+        var result: [String] = []
+
+        for part in parts {
+            if part.hasPrefix("-") && !part.hasPrefix("--") && part.count > 1 {
+                let flags = part.dropFirst()
+                // If this flag group contains a flag that takes an argument, keep as-is
+                if flags.contains(where: { argFlags.contains($0) }) {
+                    result.append(part)
+                    continue
+                }
+                let cleaned = flags.filter { !stripFlags.contains($0) }
+                if !cleaned.isEmpty {
+                    result.append("-" + cleaned)
+                }
+            } else {
+                result.append(part)
+            }
+        }
+        return result.joined(separator: " ")
+    }
+
     static func buildFullCommand(from userCommand: String) -> String {
-        let trimmed = userCommand.trimmingCharacters(in: .whitespaces)
-        guard let firstSpace = trimmed.firstIndex(of: " ") else { return trimmed }
-        let binary = trimmed[..<firstSpace]
-        let rest = trimmed[firstSpace...]
+        let sanitized = sanitizeCommand(userCommand.trimmingCharacters(in: .whitespaces))
+        guard let firstSpace = sanitized.firstIndex(of: " ") else { return sanitized }
+        let binary = sanitized[..<firstSpace]
+        let rest = sanitized[firstSpace...]
         return "\(binary) \(extraOptions)\(rest)"
     }
 

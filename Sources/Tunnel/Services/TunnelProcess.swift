@@ -13,6 +13,7 @@ class TunnelProcess {
     private var reconnectTask: DispatchWorkItem?
     private var launchTime: Date?
     private var tunnelName: String
+    private var preListeningPorts: Set<UInt16> = []
 
     var isRunning: Bool { process?.isRunning ?? false }
     var onStateChange: ((TunnelState) -> Void)?
@@ -52,6 +53,14 @@ class TunnelProcess {
     // MARK: - Private
 
     private func launchProcess() {
+        // Record which ports are already listening before we start,
+        // so we don't get false-positive "connected" from orphaned processes
+        let ports = SSHCommand.parseLocalPorts(from: command)
+        preListeningPorts = Set(ports.filter { SSHCommand.isPortListening($0) })
+        if !preListeningPorts.isEmpty {
+            FileLogger.shared.log("Ports already in use before launch: \(preListeningPorts)", tunnel: tunnelName)
+        }
+
         let proc = Process()
         proc.executableURL = URL(fileURLWithPath: "/bin/sh")
         let fullCommand = SSHCommand.buildFullCommand(from: command)
@@ -95,12 +104,15 @@ class TunnelProcess {
 
     private func checkConnection() {
         let ports = SSHCommand.parseLocalPorts(from: command)
+        // Only check ports that weren't already listening before we started
+        let portsToCheck = ports.filter { !preListeningPorts.contains($0) }
 
-        if ports.isEmpty {
+        if portsToCheck.isEmpty {
+            // No new ports to check — fall back to process-alive check
             DispatchQueue.main.asyncAfter(deadline: .now() + 3) { [weak self] in
                 guard let self, self.process?.isRunning == true else { return }
                 self.retryCount = 0
-                FileLogger.shared.log("Connected (no ports to verify, process alive)", tunnel: self.tunnelName)
+                FileLogger.shared.log("Connected (process alive after 3s)", tunnel: self.tunnelName)
                 self.notifyState(.connected)
             }
             return
@@ -112,9 +124,9 @@ class TunnelProcess {
         func poll() {
             guard self.process?.isRunning == true, !self.manualStop else { return }
 
-            if ports.allSatisfy({ SSHCommand.isPortListening($0) }) {
+            if portsToCheck.allSatisfy({ SSHCommand.isPortListening($0) }) {
                 self.retryCount = 0
-                FileLogger.shared.log("Connected (ports \(ports) listening)", tunnel: self.tunnelName)
+                FileLogger.shared.log("Connected (ports \(portsToCheck) listening)", tunnel: self.tunnelName)
                 self.notifyState(.connected)
                 return
             }
