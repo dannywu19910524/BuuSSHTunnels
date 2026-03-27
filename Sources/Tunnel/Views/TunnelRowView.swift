@@ -29,10 +29,15 @@ struct TunnelRowView: View {
 
                 Spacer()
 
-                if state.retryCount > 0 && state.status.isActive {
-                    Text("重连 \(state.retryCount)")
-                        .font(.system(size: 10))
-                        .foregroundColor(.orange)
+                VStack(alignment: .trailing, spacing: 2) {
+                    if state.retryCount > 0 && state.status.isActive {
+                        Text("重连 \(state.retryCount)")
+                            .font(.system(size: 10))
+                            .foregroundColor(.orange)
+                    }
+                    Text(statusText)
+                        .font(.system(size: 9))
+                        .foregroundColor(statusColor)
                 }
 
                 Toggle("", isOn: Binding(
@@ -50,7 +55,7 @@ struct TunnelRowView: View {
                 .labelsHidden()
             }
 
-            if showLogs && !state.recentLogs.isEmpty {
+            if (showLogs || state.status.isFailed) && !state.recentLogs.isEmpty {
                 ScrollView {
                     Text(state.recentLogs.joined(separator: "\n"))
                         .font(.system(size: 9, design: .monospaced))
@@ -92,6 +97,16 @@ struct TunnelRowView: View {
         case .connected: return .green
         case .reconnecting: return .orange
         case .failed: return .red
+        }
+    }
+
+    private var statusText: String {
+        switch state.status {
+        case .disconnected: return "已断开"
+        case .connecting: return "连接中..."
+        case .connected: return "已连接"
+        case .reconnecting: return "重连中..."
+        case .failed(let reason): return reason
         }
     }
 

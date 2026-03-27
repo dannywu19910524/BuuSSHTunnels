@@ -86,7 +86,7 @@ class TunnelManager: ObservableObject {
         guard let config = tunnels.first(where: { $0.id == id }) else { return }
         stopTunnel(id: id)
 
-        let proc = TunnelProcess(tunnelId: id, command: config.command, maxRetries: settings.maxRetries)
+        let proc = TunnelProcess(tunnelId: id, command: config.command, maxRetries: settings.maxRetries, name: config.name)
         proc.onStateChange = { [weak self] state in
             self?.handleStateChange(tunnelId: id, state: state)
         }

@@ -71,6 +71,16 @@ struct TunnelListView: View {
 
                 Spacer()
 
+                Button {
+                    NSWorkspace.shared.open(FileLogger.shared.logFileURL)
+                } label: {
+                    Image(systemName: "doc.text")
+                        .font(.system(size: 12))
+                }
+                .buttonStyle(.plain)
+                .foregroundColor(.secondary)
+                .help("打开日志文件")
+
                 Button("退出") {
                     NSApplication.shared.terminate(nil)
                 }

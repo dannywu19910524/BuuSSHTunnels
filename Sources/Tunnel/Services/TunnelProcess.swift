@@ -11,20 +11,27 @@ class TunnelProcess {
     private var manualStop = false
     private var maxRetries: Int
     private var reconnectTask: DispatchWorkItem?
+    private var launchTime: Date?
+    private var tunnelName: String
 
     var isRunning: Bool { process?.isRunning ?? false }
     var onStateChange: ((TunnelState) -> Void)?
 
-    init(tunnelId: UUID, command: String, maxRetries: Int) {
+    private static let quickFailThreshold: TimeInterval = 5
+    private static let quickFailMinDelay: TimeInterval = 5
+
+    init(tunnelId: UUID, command: String, maxRetries: Int, name: String = "") {
         self.tunnelId = tunnelId
         self.command = command
         self.maxRetries = maxRetries
+        self.tunnelName = name.isEmpty ? tunnelId.uuidString.prefix(8).description : name
     }
 
     func start() {
         manualStop = false
         retryCount = 0
         recentLogs = []
+        FileLogger.shared.log("Starting: \(command)", tunnel: tunnelName)
         launchProcess()
     }
 
@@ -35,6 +42,7 @@ class TunnelProcess {
         if let proc = process, proc.isRunning {
             proc.terminate()
         }
+        FileLogger.shared.log("Stopped by user", tunnel: tunnelName)
     }
 
     func updateMaxRetries(_ value: Int) {
@@ -46,7 +54,8 @@ class TunnelProcess {
     private func launchProcess() {
         let proc = Process()
         proc.executableURL = URL(fileURLWithPath: "/bin/sh")
-        proc.arguments = ["-c", SSHCommand.buildFullCommand(from: command)]
+        let fullCommand = SSHCommand.buildFullCommand(from: command)
+        proc.arguments = ["-c", fullCommand]
 
         let pipe = Pipe()
         proc.standardError = pipe
@@ -68,13 +77,18 @@ class TunnelProcess {
 
         self.process = proc
         self.stderrPipe = pipe
+        self.launchTime = Date()
         notifyState(.connecting)
+
+        FileLogger.shared.log("Launching: /bin/sh -c \"\(fullCommand)\"", tunnel: tunnelName)
 
         do {
             try proc.run()
             checkConnection()
         } catch {
-            appendLog("Failed to start: \(error.localizedDescription)")
+            let msg = "Failed to start: \(error.localizedDescription)"
+            appendLog(msg)
+            FileLogger.shared.log(msg, tunnel: tunnelName)
             notifyState(.failed(reason: error.localizedDescription))
         }
     }
@@ -86,6 +100,7 @@ class TunnelProcess {
             DispatchQueue.main.asyncAfter(deadline: .now() + 3) { [weak self] in
                 guard let self, self.process?.isRunning == true else { return }
                 self.retryCount = 0
+                FileLogger.shared.log("Connected (no ports to verify, process alive)", tunnel: self.tunnelName)
                 self.notifyState(.connected)
             }
             return
@@ -99,6 +114,7 @@ class TunnelProcess {
 
             if ports.allSatisfy({ SSHCommand.isPortListening($0) }) {
                 self.retryCount = 0
+                FileLogger.shared.log("Connected (ports \(ports) listening)", tunnel: self.tunnelName)
                 self.notifyState(.connected)
                 return
             }
@@ -106,6 +122,7 @@ class TunnelProcess {
             checks += 1
             if checks >= maxChecks {
                 self.retryCount = 0
+                FileLogger.shared.log("Connected (timeout, assuming OK)", tunnel: self.tunnelName)
                 self.notifyState(.connected)
                 return
             }
@@ -120,6 +137,14 @@ class TunnelProcess {
         stderrPipe?.fileHandleForReading.readabilityHandler = nil
         process = nil
 
+        let uptime = launchTime.map { Date().timeIntervalSince($0) } ?? 0
+        let isQuickFail = uptime < Self.quickFailThreshold
+
+        FileLogger.shared.log(
+            "Process exited: code=\(exitCode), uptime=\(String(format: "%.1f", uptime))s, quickFail=\(isQuickFail)",
+            tunnel: tunnelName
+        )
+
         guard !manualStop else {
             notifyState(.disconnected)
             return
@@ -128,15 +153,28 @@ class TunnelProcess {
         retryCount += 1
 
         if retryCount >= maxRetries {
-            notifyState(.failed(reason: "已达到最大重连次数 (\(maxRetries))"))
+            let reason = "已达到最大重连次数 (\(maxRetries))"
+            FileLogger.shared.log(reason, tunnel: tunnelName)
+            notifyState(.failed(reason: reason))
             return
         }
 
-        scheduleReconnect()
+        scheduleReconnect(quickFail: isQuickFail)
     }
 
-    private func scheduleReconnect() {
-        let delay = ReconnectPolicy.delay(forAttempt: retryCount)
+    private func scheduleReconnect(quickFail: Bool) {
+        var delay = ReconnectPolicy.delay(forAttempt: retryCount)
+
+        // Quick failure: enforce minimum delay to avoid tight loops
+        if quickFail {
+            delay = max(delay, Self.quickFailMinDelay)
+        }
+
+        FileLogger.shared.log(
+            "Reconnecting in \(String(format: "%.1f", delay))s (attempt \(retryCount))",
+            tunnel: tunnelName
+        )
+
         notifyState(.reconnecting(attempt: retryCount))
 
         let task = DispatchWorkItem { [weak self] in
@@ -151,6 +189,10 @@ class TunnelProcess {
         recentLogs.append(contentsOf: lines)
         if recentLogs.count > 50 {
             recentLogs = Array(recentLogs.suffix(50))
+        }
+        // Also write to file log
+        for line in lines {
+            FileLogger.shared.log("stderr: \(line)", tunnel: tunnelName)
         }
     }
 
