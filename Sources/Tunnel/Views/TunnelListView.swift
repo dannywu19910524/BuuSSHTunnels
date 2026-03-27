@@ -21,7 +21,7 @@ struct TunnelListView: View {
     var body: some View {
         VStack(spacing: 0) {
             HStack {
-                Text("Tunnel Manager")
+                Text("Buu SSH Tunnels")
                     .font(.headline)
                 Spacer()
                 Button { activeSheet = .settings } label: {

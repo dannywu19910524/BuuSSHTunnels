@@ -14,7 +14,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
 
         if let button = statusItem.button {
-            button.image = NSImage(systemSymbolName: "network", accessibilityDescription: "Tunnel")
+            button.image = NSImage(systemSymbolName: "network", accessibilityDescription: "Buu SSH Tunnels")
             button.action = #selector(togglePopover)
             button.target = self
         }
@@ -51,7 +51,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         let iconName = manager.menuBarIcon
         statusItem.button?.image = NSImage(
             systemSymbolName: iconName,
-            accessibilityDescription: "Tunnel"
+            accessibilityDescription: "Buu SSH Tunnels"
         )
     }
 }

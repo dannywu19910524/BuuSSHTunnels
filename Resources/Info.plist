@@ -4,11 +4,11 @@
 <plist version="1.0">
 <dict>
     <key>CFBundleIdentifier</key>
-    <string>com.tunnel.app</string>
+    <string>com.buu.ssh-tunnels</string>
     <key>CFBundleName</key>
-    <string>Tunnel</string>
+    <string>Buu SSH Tunnels</string>
     <key>CFBundleDisplayName</key>
-    <string>Tunnel</string>
+    <string>Buu SSH Tunnels</string>
     <key>CFBundleVersion</key>
     <string>1</string>
     <key>CFBundleShortVersionString</key>
