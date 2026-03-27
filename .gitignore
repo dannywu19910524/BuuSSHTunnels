@@ -1,4 +1,6 @@
 .build/
 .swiftpm/
 Tunnel.app/
+Tunnel.zip
 .superpowers/
+CLAUDE.md
