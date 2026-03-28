@@ -39,4 +39,21 @@ final class TunnelConfigTests: XCTestCase {
         XCTAssertTrue(config.tunnels.isEmpty)
         XCTAssertEqual(config.settings.maxRetries, 999)
     }
+    func testTunnelConfigTagDefaultsToNil() {
+        let config = TunnelConfig(name: "test", command: "ssh user@host")
+        XCTAssertNil(config.tag)
+    }
+    func testTunnelConfigTagEncodesDecode() throws {
+        let original = TunnelConfig(name: "DB", command: "ssh user@host", tag: "production")
+        let data = try JSONEncoder().encode(original)
+        let decoded = try JSONDecoder().decode(TunnelConfig.self, from: data)
+        XCTAssertEqual(decoded.tag, "production")
+    }
+    func testTunnelConfigWithoutTagDecodesFromOldFormat() throws {
+        let json = """
+        {"id":"00000000-0000-0000-0000-000000000001","name":"test","command":"ssh user@host","autoConnect":true}
+        """.data(using: .utf8)!
+        let decoded = try JSONDecoder().decode(TunnelConfig.self, from: json)
+        XCTAssertNil(decoded.tag)
+    }
 }

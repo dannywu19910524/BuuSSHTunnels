@@ -5,11 +5,24 @@ struct TunnelConfig: Codable, Identifiable {
     var name: String
     var command: String
     var autoConnect: Bool
-    init(id: UUID = UUID(), name: String = "", command: String = "", autoConnect: Bool = true) {
+    var tag: String?
+    var autoKillPortConflicts: Bool
+    init(id: UUID = UUID(), name: String = "", command: String = "", autoConnect: Bool = true, tag: String? = nil, autoKillPortConflicts: Bool = false) {
         self.id = id
         self.name = name
         self.command = command
         self.autoConnect = autoConnect
+        self.tag = tag
+        self.autoKillPortConflicts = autoKillPortConflicts
+    }
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decode(UUID.self, forKey: .id)
+        name = try c.decode(String.self, forKey: .name)
+        command = try c.decode(String.self, forKey: .command)
+        autoConnect = try c.decode(Bool.self, forKey: .autoConnect)
+        tag = try c.decodeIfPresent(String.self, forKey: .tag)
+        autoKillPortConflicts = try c.decodeIfPresent(Bool.self, forKey: .autoKillPortConflicts) ?? false
     }
 }
 

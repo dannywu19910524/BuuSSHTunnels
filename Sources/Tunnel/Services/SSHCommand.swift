@@ -57,6 +57,46 @@ enum SSHCommand {
         return ports
     }
 
+    /// Returns PIDs of processes listening on the given port, or empty if none.
+    static func findProcesses(onPort port: UInt16) -> [(pid: Int32, name: String)] {
+        let proc = Process()
+        proc.executableURL = URL(fileURLWithPath: "/usr/sbin/lsof")
+        proc.arguments = ["-ti", ":\(port)"]
+        let pipe = Pipe()
+        proc.standardOutput = pipe
+        proc.standardError = FileHandle.nullDevice
+        do {
+            try proc.run()
+            proc.waitUntilExit()
+        } catch {
+            return []
+        }
+        let data = pipe.fileHandleForReading.readDataToEndOfFile()
+        guard let output = String(data: data, encoding: .utf8) else { return [] }
+        var results: [(pid: Int32, name: String)] = []
+        for line in output.components(separatedBy: .newlines) {
+            let trimmed = line.trimmingCharacters(in: .whitespaces)
+            guard let pid = Int32(trimmed) else { continue }
+            // Get process name via ps
+            let ps = Process()
+            ps.executableURL = URL(fileURLWithPath: "/bin/ps")
+            ps.arguments = ["-p", "\(pid)", "-o", "comm="]
+            let psPipe = Pipe()
+            ps.standardOutput = psPipe
+            ps.standardError = FileHandle.nullDevice
+            do {
+                try ps.run()
+                ps.waitUntilExit()
+                let psData = psPipe.fileHandleForReading.readDataToEndOfFile()
+                let name = String(data: psData, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+                results.append((pid: pid, name: name))
+            } catch {
+                results.append((pid: pid, name: ""))
+            }
+        }
+        return results
+    }
+
     static func isPortListening(_ port: UInt16) -> Bool {
         let sock = socket(AF_INET, SOCK_STREAM, 0)
         guard sock >= 0 else { return false }

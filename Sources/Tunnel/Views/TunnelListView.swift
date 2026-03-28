@@ -2,29 +2,38 @@ import SwiftUI
 
 struct TunnelListView: View {
     @EnvironmentObject var manager: TunnelManager
-    @State private var activeSheet: SheetType?
+    @State private var activeView: ActiveView = .list
 
-    enum SheetType: Identifiable {
+    enum ActiveView {
+        case list
         case add
         case edit(TunnelConfig)
         case settings
-
-        var id: String {
-            switch self {
-            case .add: return "add"
-            case .edit(let t): return t.id.uuidString
-            case .settings: return "settings"
-            }
-        }
     }
 
     var body: some View {
+        Group {
+            switch activeView {
+            case .list:
+                listContent
+            case .add:
+                AddTunnelView(onDismiss: { activeView = .list })
+            case .edit(let tunnel):
+                AddTunnelView(editingTunnel: tunnel, onDismiss: { activeView = .list })
+            case .settings:
+                SettingsView(onDismiss: { activeView = .list })
+            }
+        }
+        .environmentObject(manager)
+    }
+
+    private var listContent: some View {
         VStack(spacing: 0) {
             HStack {
                 Text("Buu SSH Tunnels")
                     .font(.headline)
                 Spacer()
-                Button { activeSheet = .settings } label: {
+                Button { activeView = .settings } label: {
                     Image(systemName: "gear")
                 }
                 .buttonStyle(.plain)
@@ -49,7 +58,7 @@ struct TunnelListView: View {
                     VStack(spacing: 8) {
                         ForEach(manager.tunnels) { tunnel in
                             TunnelRowView(tunnel: tunnel, onEdit: {
-                                activeSheet = .edit(tunnel)
+                                activeView = .edit(tunnel)
                             })
                         }
                     }
@@ -62,7 +71,7 @@ struct TunnelListView: View {
             Divider()
 
             HStack {
-                Button { activeSheet = .add } label: {
+                Button { activeView = .add } label: {
                     Label("新建连接", systemImage: "plus")
                         .font(.system(size: 12))
                 }
@@ -92,18 +101,23 @@ struct TunnelListView: View {
             .padding(.vertical, 10)
         }
         .frame(width: 360)
-        .sheet(item: $activeSheet) { sheet in
-            Group {
-                switch sheet {
-                case .add:
-                    AddTunnelView()
-                case .edit(let tunnel):
-                    AddTunnelView(editingTunnel: tunnel)
-                case .settings:
-                    SettingsView()
+        .alert("端口被占用", isPresented: Binding(
+            get: { manager.portConflict != nil },
+            set: { if !$0 { manager.cancelPortConflict() } }
+        )) {
+            Button("终止进程并连接", role: .destructive) {
+                if let conflict = manager.portConflict {
+                    manager.forceStartTunnel(killingConflicts: conflict)
                 }
             }
-            .environmentObject(manager)
+            Button("取消", role: .cancel) {
+                manager.cancelPortConflict()
+            }
+        } message: {
+            if let conflict = manager.portConflict {
+                let details = conflict.ports.map { "端口 \($0.port) → PID \($0.pid) (\($0.processName))" }.joined(separator: "\n")
+                Text("以下端口已被其他进程占用：\n\(details)\n\n是否终止这些进程？")
+            }
         }
     }
 }

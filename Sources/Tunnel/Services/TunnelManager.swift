@@ -2,10 +2,16 @@ import Foundation
 import Combine
 import AppKit
 
+struct PortConflict {
+    let tunnelId: UUID
+    let ports: [(port: UInt16, pid: Int32, processName: String)]
+}
+
 class TunnelManager: ObservableObject {
     @Published var tunnels: [TunnelConfig] = []
     @Published var settings: AppSettings = AppSettings()
     @Published private(set) var tunnelStates: [UUID: TunnelState] = [:]
+    @Published var portConflict: PortConflict?
 
     private let store: ConfigStore
     private var processes: [UUID: TunnelProcess] = [:]
@@ -86,7 +92,48 @@ class TunnelManager: ObservableObject {
         guard let config = tunnels.first(where: { $0.id == id }) else { return }
         stopTunnel(id: id)
 
-        let proc = TunnelProcess(tunnelId: id, command: config.command, maxRetries: settings.maxRetries, name: config.name)
+        // Check for port conflicts before starting
+        let ports = SSHCommand.parseLocalPorts(from: config.command)
+        var conflicts: [(port: UInt16, pid: Int32, processName: String)] = []
+        for port in ports {
+            let procs = SSHCommand.findProcesses(onPort: port)
+            for p in procs {
+                conflicts.append((port: port, pid: p.pid, processName: p.name))
+            }
+        }
+
+        if !conflicts.isEmpty {
+            if config.autoKillPortConflicts {
+                let conflict = PortConflict(tunnelId: id, ports: conflicts)
+                forceStartTunnel(killingConflicts: conflict)
+                return
+            }
+            portConflict = PortConflict(tunnelId: id, ports: conflicts)
+            return
+        }
+
+        launchTunnel(id: id, command: config.command, name: config.name)
+    }
+
+    func forceStartTunnel(killingConflicts conflict: PortConflict) {
+        for entry in conflict.ports {
+            kill(entry.pid, SIGTERM)
+            FileLogger.shared.log("Killed process \(entry.pid) (\(entry.processName)) on port \(entry.port)")
+        }
+        portConflict = nil
+        // Brief delay to let ports release
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
+            guard let self, let config = self.tunnels.first(where: { $0.id == conflict.tunnelId }) else { return }
+            self.launchTunnel(id: conflict.tunnelId, command: config.command, name: config.name)
+        }
+    }
+
+    func cancelPortConflict() {
+        portConflict = nil
+    }
+
+    private func launchTunnel(id: UUID, command: String, name: String) {
+        let proc = TunnelProcess(tunnelId: id, command: command, maxRetries: settings.maxRetries, name: name)
         proc.onStateChange = { [weak self] state in
             self?.handleStateChange(tunnelId: id, state: state)
         }
