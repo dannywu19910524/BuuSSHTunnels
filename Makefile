@@ -12,6 +12,7 @@ build:
 	cp "$(BUILD_DIR)/$(BINARY_NAME)" "$(APP_BUNDLE)/Contents/MacOS/$(BINARY_NAME)"
 	cp Resources/Info.plist "$(APP_BUNDLE)/Contents/"
 	cp Resources/AppIcon.icns "$(APP_BUNDLE)/Contents/Resources/"
+	codesign --force --deep --sign - "$(APP_BUNDLE)"
 
 run: build
 	open "$(APP_BUNDLE)"
