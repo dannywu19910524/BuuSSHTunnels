@@ -79,6 +79,16 @@ struct TunnelRowView: View {
         .onTapGesture { showLogs.toggle() }
         .contextMenu {
             Button("编辑") { onEdit() }
+            Button("复制") {
+                let copy = TunnelConfig(
+                    name: (tunnel.name.isEmpty ? "Untitled" : tunnel.name) + " 副本",
+                    command: tunnel.command,
+                    autoConnect: false,
+                    tag: tunnel.tag,
+                    autoKillPortConflicts: tunnel.autoKillPortConflicts
+                )
+                manager.addTunnel(copy)
+            }
             Divider()
             Button("删除", role: .destructive) { showDeleteAlert = true }
         }
